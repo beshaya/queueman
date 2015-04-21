@@ -4,7 +4,9 @@
 
 var redis = require('redis');
 var console_prefix = '[queueman]'
-var queue_prefix = 'queueman.'
+var default_queue_prefix = 'queueman.'
+var cumin_queue_prefix = 'cumin.'
+var queue_prefix = default_queue_prefix
 
 var redis_args
 
@@ -33,21 +35,35 @@ module.exports = function(port, host, auth) {
   }
 
   return {
+
+    //use cumin's queue prefix and pretend we are cumin?
+    cuminMode: function(cumin_mode) {
+      if (cumin_mode) {
+	queue_prefix = cumin_queue_prefix;
+      } else {
+	queue_prefix = default_queue_prefix;
+      }
+    },
     listener: function(queue_name, auto_reconnect) {
       var full_name = makeQueuemanName(queue_name);
       var client = redis.createClient.apply(redis, redis_args);
       var listening = false;
+      var keep_listening = false;
 
       //continueListening does all the lifting here
       continueListening = function(handler) {
 	client.blpop(full_name, redis_blpop_timeout, function(err, data) {
 	  if(err) return console.log(err);
 	  if(data) {
-	    handler(data)
+	    handler(JSON.parse(data[1]).data)
 	  }
-	  process.nextTick(function() {
-	    continueListening(handler)
-	  })
+	  if (keep_listening) {
+	    process.nextTick(function() {
+	      continueListening(handler)
+	    })
+	  } else {
+	    listening = false;
+	  }
 	});
       }
 
@@ -62,14 +78,22 @@ module.exports = function(port, host, auth) {
 	    console.warn(console_prefix, 'Listener disconnect');
 	  });
 	  client.on('ready', function() {
-	    if (!listening) {
+	    if (!listening && keep_listening) {
 	      listening = true;
 	      continueListening(handler)
 	    }
 	  });
 	}
+	listening = true;
+	keep_listening = true;
 	continueListening(handler)
       }
+      //stop listening 
+      //will stop after next value is returned or redis.blop times out
+      stopListening = function() {
+	keep_listening = false;
+      }
+	
 
       process.on("SIGINT", onKillSignal)
       process.on("SIGTERM", onKillSignal)
@@ -77,8 +101,15 @@ module.exports = function(port, host, auth) {
       return {listen: startListening};
 
     },
-    push: function(queue_name, message, done) {
+    push: function(queue_name, data, done) {
       var full_name = makeQueuemanName(queue_name);
+      var message = JSON.stringify({
+	byPid: process.pid,
+	byTitle: process.title,
+	date: Date.now(),
+	data: data,
+	retryCount: 0
+      })
       push_client.rpush(full_name, message, done)
     }
   }

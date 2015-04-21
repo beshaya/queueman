@@ -15,7 +15,9 @@
   "keywords": ["redis", "queue", "distributed", "computing", "concurrency"],
   "devDependencies": {
     "should": "1.2.x",
-    "mocha": "1.8.x"
+    "mocha": "1.8.x",
+    "cumin": "*",
+    "optimist": "*"
   },
   "scripts": {
     "test": "NODE_ENV=test ./node_modules/mocha/bin/mocha --reporter spec"
