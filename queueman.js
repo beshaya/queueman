@@ -14,7 +14,7 @@ module.exports = function(port, host, auth) {
   redis_args = arguments;
 
   var redis_blpop_timeout = 1000;
-  var killSignalReceived = false;
+  var kill_signal_received = false;
 
   var push_client = redis.createClient.apply(redis, redis_args);
 
@@ -26,7 +26,7 @@ module.exports = function(port, host, auth) {
     return queue_prefix + postfix
   }
   function onKillSignal() {
-    killSignalReceived = true;
+    kill_signal_received = true;
     console.info(console_prefix, "Attempting Shutdown");
     setTimeout(function() {
       console.info(console_prefix, "Forcing kill")
@@ -57,7 +57,7 @@ module.exports = function(port, host, auth) {
 	  if(data) {
 	    handler(JSON.parse(data[1]).data)
 	  }
-	  if (keep_listening) {
+	  if (keep_listening && !kill_signal_received ) {
 	    process.nextTick(function() {
 	      continueListening(handler)
 	    })
@@ -88,6 +88,7 @@ module.exports = function(port, host, auth) {
 	keep_listening = true;
 	continueListening(handler)
       }
+
       //stop listening 
       //will stop after next value is returned or redis.blop times out
       stopListening = function() {
